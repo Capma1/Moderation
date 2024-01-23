@@ -5,45 +5,48 @@ const state = require('../../utils/sharedState');
 const highlightsCache = require('../../utils/highlightsCache');
 
 async function checkHighlights(message) {
-	if (message.author.bot || !message.guild.id) return;
+    if (message.author.bot || !message.guild.id) return;
 
-	log.debug(`Checking highlights for message`);
+    log.debug(`Checking highlights for message in guild: ${message.guild.id}`);
 
-	const highlights = highlightsCache.get(message.guild.id);
-	if (!highlights || highlights.length === 0) return;
+    const highlights = highlightsCache.get(message.guild.id);
+    if (!highlights || highlights.length === 0) return;
 
-	const dmPromises = [];
+    const dmPromises = [];
 
-	for (const h of highlights) {
-		if (message.content.toLowerCase().includes(h.phrase) && message.author.id !== h.userID) {
-			const isCooldown = await state.getHLCoolDown();
-			if (!isCooldown.has(h.userID)) {
-				await state.addHLCoolDown(h.userID);
+    for (const h of highlights) {
+        if (message.content.toLowerCase().includes(h.phrase) && message.author.id !== h.userID) {
+            // Check if this particular highlight for this moderator is on cooldown
+            if (!state.isHighlightOnCoolDown(h.userID, h.phrase)) {
+                // Add the highlight to the cooldown list for this moderator
+                state.addHighlightCoolDown(h.userID, h.phrase, h.cooldownDuration); 
 
-				const aviURL = message.author.avatarURL({ extension: 'png', forceStatic: false, size: 1024 }) || message.author.defaultAvatarURL;
-				const name = message.author.username;
-				const hEmbed = new EmbedBuilder()
-					.setAuthor({ name: name, iconURL: aviURL })
-					.setColor(colors.main)
-					.setTitle('Highlighter Alert')
-					.setDescription(`Found message containing phrase: \`${h.phrase}\`!`)
-					.addFields({ name: 'Message', value: message.content })
-					.setTimestamp();
+                const aviURL = message.author.avatarURL({ extension: 'png', forceStatic: false, size: 1024 }) || message.author.defaultAvatarURL;
+                const name = message.author.username;
+                const hEmbed = new EmbedBuilder()
+                    .setAuthor({ name: name, iconURL: aviURL })
+                    .setColor(colors.main)
+                    .setTitle('Highlighter Alert')
+                    .setDescription(`Found message containing phrase: \`${h.phrase}\`!`)
+                    .addFields({ name: 'Message', value: message.content })
+                    .setTimestamp();
 
-				dmPromises.push(
-					message.client.users.cache
-						.get(h.userID)
-						?.send({
-							embeds: [hEmbed],
-							content: `Jump to Message: ${message.url}`,
-						})
-						.catch(e => log.error(`Couldn't send highlight DM: ${e}`))
-				);
-			}
-		}
-	}
+                // Push the notification promise to the array to handle it later
+                dmPromises.push(
+                    message.client.users.cache
+                        .get(h.userID)
+                        ?.send({
+                            embeds: [hEmbed],
+                            content: `Jump to Message: ${message.url}`,
+                        })
+                        .catch(e => log.error(`Couldn't send highlight DM: ${e}`))
+                );
+            }
+        }
+    }
 
-	await Promise.allSettled(dmPromises);
+    // Execute all the DM sending promises concurrently and handle them as they resolve
+    await Promise.allSettled(dmPromises);
 }
 
 module.exports = { checkHighlights };
