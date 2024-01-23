@@ -17,8 +17,13 @@ async function checkHighlights(message) {
 	for (const h of highlights) {
 		if (message.content.toLowerCase().includes(h.phrase) && message.author.id !== h.userID) {
 			const isCooldown = await state.getHLCoolDown();
-			if (!isCooldown.has(h.userID)) {
-				await state.addHLCoolDown(h.userID);
+			const lastHighlightTime = isCooldown.get(h.userID);
+			const currentTime = new Date();
+			const cooldownDuration = h.cooldownDuration * 60000; // convert minutes to milliseconds
+			
+			// check if the current time is past the cooldown period
+			if (!lastHighlightTime || currentTime - lastHighlightTime > cooldownDuration) {
+				await state.addHLCoolDown(h.userID, currentTime); // save the current time as the last highlight time
 
 				const aviURL = message.author.avatarURL({ extension: 'png', forceStatic: false, size: 1024 }) || message.author.defaultAvatarURL;
 				const name = message.author.username;
