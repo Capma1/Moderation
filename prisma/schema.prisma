@@ -114,7 +114,7 @@ model Highlight {
     userID  String
     Guild   Guild  @relation(fields: [guildId], references: [id])
     guildId String
-
+    cooldownDuration Int // the duration in minutes
     @@index([guildId])
 }
 
